@@ -130,6 +130,16 @@ class InboundServiceImplTest {
                         inboundMapper.sumApprovedQtyBySourceGeneralAccount(
                                 ACCOUNT_ID, FOREIGN_PRODUCT_ID))
                 .thenReturn(List.of());
+        lenient()
+                .when(
+                        inboundMapper.sumOutboundQtyByAccountAndProduct(
+                                ACCOUNT_ID, FOREIGN_PRODUCT_ID))
+                .thenReturn(BigDecimal.ZERO);
+        lenient()
+                .when(
+                        inboundMapper.sumOutboundQtyBySourceGeneralAccount(
+                                ACCOUNT_ID, FOREIGN_PRODUCT_ID))
+                .thenReturn(List.of());
     }
 
     @Test

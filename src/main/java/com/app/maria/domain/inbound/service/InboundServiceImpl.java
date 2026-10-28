@@ -109,7 +109,12 @@ public class InboundServiceImpl implements InboundService {
 
         BigDecimal alreadyApprovedQty =
                 inboundMapper.sumApprovedQtyByAccountAndProduct(accountId, foreignProductId);
-        BigDecimal availableQty = snapshotQty.subtract(alreadyApprovedQty).max(BigDecimal.ZERO);
+        BigDecimal alreadyOutboundedQty =
+                inboundMapper.sumOutboundQtyByAccountAndProduct(accountId, foreignProductId);
+        BigDecimal availableQty =
+                snapshotQty
+                        .subtract(alreadyApprovedQty.subtract(alreadyOutboundedQty))
+                        .max(BigDecimal.ZERO);
 
         BigDecimal approvedQty = requestedQty.min(availableQty);
         if (currentHoldingAtRequest != null) {
@@ -140,14 +145,33 @@ public class InboundServiceImpl implements InboundService {
 
         List<RegistrableStockResponseDTO> lots =
                 fetchRegistrableStockLots(ciHash, foreignProductId);
-        Map<Long, BigDecimal> remainingAlreadyUsedByAccount =
-                inboundMapper
-                        .sumApprovedQtyBySourceGeneralAccount(accountId, foreignProductId)
+        Map<Long, BigDecimal> approvedByAccount =
+                inboundMapper.sumApprovedQtyBySourceGeneralAccount(accountId, foreignProductId)
                         .stream()
                         .collect(
                                 Collectors.toMap(
                                         SourceLotApprovedQtyDTO::getGeneralAccountId,
                                         SourceLotApprovedQtyDTO::getApprovedQty));
+        Map<Long, BigDecimal> outboundedByAccount =
+                inboundMapper.sumOutboundQtyBySourceGeneralAccount(accountId, foreignProductId)
+                        .stream()
+                        .collect(
+                                Collectors.toMap(
+                                        SourceLotApprovedQtyDTO::getGeneralAccountId,
+                                        SourceLotApprovedQtyDTO::getApprovedQty));
+        // netLocked per source account = approved - outbounded (재입고를 위해 출고분을 차감)
+        Map<Long, BigDecimal> remainingAlreadyUsedByAccount =
+                approvedByAccount.entrySet().stream()
+                        .collect(
+                                Collectors.toMap(
+                                        Map.Entry::getKey,
+                                        e ->
+                                                e.getValue()
+                                                        .subtract(
+                                                                outboundedByAccount.getOrDefault(
+                                                                        e.getKey(),
+                                                                        BigDecimal.ZERO))
+                                                        .max(BigDecimal.ZERO)));
 
         BigDecimal remaining = approvedQty;
         boolean anyDetailCreated = false;
