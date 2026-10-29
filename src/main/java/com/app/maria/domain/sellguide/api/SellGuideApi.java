@@ -22,8 +22,6 @@ public class SellGuideApi {
     public ResponseEntity<ApiResponseDTO<SellGuideResponseDTO>> getSellGuide(
             @AuthenticationPrincipal(errorOnInvalidType = true) CustomerPrincipal principal) {
         return ResponseEntity.ok(
-                ApiResponseDTO.of(
-                        "매도 가이드 조회 성공",
-                        sellGuideService.guide(principal.customerId())));
+                ApiResponseDTO.of("매도 가이드 조회 성공", sellGuideService.guide(principal.customerId())));
     }
 }

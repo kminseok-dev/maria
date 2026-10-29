@@ -146,14 +146,16 @@ public class InboundServiceImpl implements InboundService {
         List<RegistrableStockResponseDTO> lots =
                 fetchRegistrableStockLots(ciHash, foreignProductId);
         Map<Long, BigDecimal> approvedByAccount =
-                inboundMapper.sumApprovedQtyBySourceGeneralAccount(accountId, foreignProductId)
+                inboundMapper
+                        .sumApprovedQtyBySourceGeneralAccount(accountId, foreignProductId)
                         .stream()
                         .collect(
                                 Collectors.toMap(
                                         SourceLotApprovedQtyDTO::getGeneralAccountId,
                                         SourceLotApprovedQtyDTO::getApprovedQty));
         Map<Long, BigDecimal> outboundedByAccount =
-                inboundMapper.sumOutboundQtyBySourceGeneralAccount(accountId, foreignProductId)
+                inboundMapper
+                        .sumOutboundQtyBySourceGeneralAccount(accountId, foreignProductId)
                         .stream()
                         .collect(
                                 Collectors.toMap(

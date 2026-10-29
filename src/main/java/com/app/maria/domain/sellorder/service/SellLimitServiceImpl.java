@@ -73,15 +73,14 @@ public class SellLimitServiceImpl implements SellLimitService {
         BigDecimal limitAmount =
                 accountMapper
                         .selectByAccountId(accountId)
-                        .orElseThrow(
-                                () ->
-                                        new AppException(
-                                                ErrorType.ACCOUNT_NOT_FOUND, accountId))
+                        .orElseThrow(() -> new AppException(ErrorType.ACCOUNT_NOT_FOUND, accountId))
                         .getLimitAmount();
 
         BigDecimal usedAmount = sellLimitMapper.sumUsedAmount(accountId);
 
-        return MAX_TOTAL_SELL_LIMIT.subtract(usedAmount).subtract(externalSum)
+        return MAX_TOTAL_SELL_LIMIT
+                .subtract(usedAmount)
+                .subtract(externalSum)
                 .min(limitAmount.subtract(usedAmount))
                 .max(BigDecimal.ZERO);
     }

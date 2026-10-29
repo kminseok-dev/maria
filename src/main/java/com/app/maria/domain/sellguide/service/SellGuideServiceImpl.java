@@ -9,14 +9,15 @@ import com.app.maria.domain.sellguide.dto.response.SellGuideProductDTO;
 import com.app.maria.domain.sellguide.dto.response.SellGuideResponseDTO;
 import com.app.maria.domain.sellguide.dto.response.SellGuideSummaryDTO;
 import com.app.maria.domain.sellguide.type.LotRecommendationStatus;
+import com.app.maria.domain.sellorder.service.SellLimitService;
 import com.app.maria.domain.tax.dto.ExternalBuyDTO;
 import com.app.maria.domain.tax.dto.HeldLotDTO;
 import com.app.maria.domain.tax.dto.SellLotDTO;
 import com.app.maria.domain.tax.dto.TaxCalculationResultDTO;
 import com.app.maria.domain.tax.dto.TaxRuleDTO;
 import com.app.maria.domain.tax.mapper.TaxMapper;
-import com.app.maria.domain.tax.service.TaxCalculator;
 import com.app.maria.domain.tax.service.TaxCalculations;
+import com.app.maria.domain.tax.service.TaxCalculator;
 import com.app.maria.domain.tax.type.TaxRuleType;
 import com.app.maria.global.client.exchange.ExchangeRateClient;
 import com.app.maria.global.client.exchange.RateWithDate;
@@ -24,7 +25,6 @@ import com.app.maria.global.client.kis.KisExchangeCode;
 import com.app.maria.global.client.kis.KisPriceClient;
 import com.app.maria.global.client.kis.PriceWithDate;
 import com.app.maria.global.clock.service.BusinessClockService;
-import com.app.maria.domain.sellorder.service.SellLimitService;
 import com.app.maria.global.exception.AppException;
 import com.app.maria.global.exception.ErrorType;
 import java.math.BigDecimal;
@@ -32,8 +32,8 @@ import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
@@ -91,8 +91,12 @@ public class SellGuideServiceImpl implements SellGuideService {
         // ── 5. 보유 lot 조회 (purchaseDate ASC, inboundDetailId ASC — 쿼리에서 정렬) ──
         List<HeldLotDTO> heldLots = taxMapper.selectHeldLotsByAccountId(account.getAccountId());
         if (heldLots.isEmpty()) {
-            return emptyResponse(remainingLimit, currentWeight, periodLabel,
-                    expectedSettlementDate, "보유 중인 입고 lot이 없습니다.");
+            return emptyResponse(
+                    remainingLimit,
+                    currentWeight,
+                    periodLabel,
+                    expectedSettlementDate,
+                    "보유 중인 입고 lot이 없습니다.");
         }
 
         // ── 6. 시세·환율 일괄 조회 ────────────────────────────────────────────
@@ -110,7 +114,8 @@ public class SellGuideServiceImpl implements SellGuideService {
         Map<String, BigDecimal> ratesByCurrency = new HashMap<>();
         for (HeldLotDTO lot : heldLots) {
             String currency = lot.getCurrency();
-            if (ratesByCurrency.containsKey(currency) || failedProductNames.containsKey(lot.getForeignProductId())) {
+            if (ratesByCurrency.containsKey(currency)
+                    || failedProductNames.containsKey(lot.getForeignProductId())) {
                 continue;
             }
             if (!ratesByCurrency.containsKey(currency)) {
@@ -141,7 +146,8 @@ public class SellGuideServiceImpl implements SellGuideService {
             }
             try {
                 String exchangeCode = KisExchangeCode.fromMarket(rep.getMarket());
-                PriceWithDate pwd = kisPriceClient.getPreviousCloseWithDate(exchangeCode, rep.getTicker());
+                PriceWithDate pwd =
+                        kisPriceClient.getPreviousCloseWithDate(exchangeCode, rep.getTicker());
                 if (pwd.getPrice().compareTo(ZERO) <= 0) {
                     throw new AppException(ErrorType.KIS_PRICE_NOT_FOUND, rep.getTicker());
                 }
@@ -149,7 +155,8 @@ public class SellGuideServiceImpl implements SellGuideService {
                 priceKrwByProduct.put(productId, priceKrw);
                 priceBaseDateByProduct.put(productId, pwd.getBaseDate()); // null 가능
 
-                if (pwd.getBaseDate() == null && !warnings.contains("일부 종목의 전일종가 기준일을 확인할 수 없습니다. 실제 기준일과 다를 수 있습니다.")) {
+                if (pwd.getBaseDate() == null
+                        && !warnings.contains("일부 종목의 전일종가 기준일을 확인할 수 없습니다. 실제 기준일과 다를 수 있습니다.")) {
                     warnings.add("일부 종목의 전일종가 기준일을 확인할 수 없습니다. 실제 기준일과 다를 수 있습니다.");
                 }
             } catch (AppException e) {
@@ -161,9 +168,13 @@ public class SellGuideServiceImpl implements SellGuideService {
         // ── 7. 종목별 FIFO Deque 구성 ─────────────────────────────────────────
         // lot은 이미 purchaseDate ASC, inboundDetailId ASC 정렬됨
         Map<Long, Deque<LotEntry>> deques = new LinkedHashMap<>();
-        Map<Long, List<HeldLotDTO>> lotsByProduct = heldLots.stream()
-                .collect(Collectors.groupingBy(HeldLotDTO::getForeignProductId,
-                        LinkedHashMap::new, Collectors.toList()));
+        Map<Long, List<HeldLotDTO>> lotsByProduct =
+                heldLots.stream()
+                        .collect(
+                                Collectors.groupingBy(
+                                        HeldLotDTO::getForeignProductId,
+                                        LinkedHashMap::new,
+                                        Collectors.toList()));
 
         for (Map.Entry<Long, List<HeldLotDTO>> e : lotsByProduct.entrySet()) {
             Long productId = e.getKey();
@@ -171,14 +182,20 @@ public class SellGuideServiceImpl implements SellGuideService {
             Deque<LotEntry> deque = new ArrayDeque<>();
             for (HeldLotDTO lot : e.getValue()) {
                 BigDecimal priceKrw = priceKrwByProduct.get(productId);
-                BigDecimal purchasePriceKrw = lot.getPurchasePrice().multiply(lot.getPurchaseFxRate());
+                BigDecimal purchasePriceKrw =
+                        lot.getPurchasePrice().multiply(lot.getPurchaseFxRate());
                 BigDecimal gainRate = null;
                 if (priceKrw != null && priceKrw.compareTo(ZERO) > 0) {
-                    gainRate = priceKrw.subtract(purchasePriceKrw)
-                            .divide(priceKrw, 4, RoundingMode.HALF_UP);
+                    gainRate =
+                            priceKrw.subtract(purchasePriceKrw)
+                                    .divide(priceKrw, 4, RoundingMode.HALF_UP);
                 }
-                deque.add(new LotEntry(lot.getInboundDetailId(), lot.getCurrentQty(),
-                        purchasePriceKrw, gainRate));
+                deque.add(
+                        new LotEntry(
+                                lot.getInboundDetailId(),
+                                lot.getCurrentQty(),
+                                purchasePriceKrw,
+                                gainRate));
             }
             if (!deque.isEmpty()) {
                 deques.put(productId, deque);
@@ -257,19 +274,28 @@ public class SellGuideServiceImpl implements SellGuideService {
             }
 
             ProductResult result = productResults.get(productId);
-            LotRecommendationStatus status = determineStatus(productId, lots, priceKrwByProduct, result);
+            LotRecommendationStatus status =
+                    determineStatus(productId, lots, priceKrwByProduct, result);
 
             BigDecimal effectiveGainRate;
             if (status == LotRecommendationStatus.RECOMMENDED) {
-                effectiveGainRate = result.expectedSellAmount.compareTo(ZERO) > 0
-                        ? result.expectedGain.divide(result.expectedSellAmount, 4, RoundingMode.HALF_UP)
-                        : null;
+                effectiveGainRate =
+                        result.expectedSellAmount.compareTo(ZERO) > 0
+                                ? result.expectedGain.divide(
+                                        result.expectedSellAmount, 4, RoundingMode.HALF_UP)
+                                : null;
             } else {
                 // 첫 lot의 gainRate (표시용)
-                effectiveGainRate = lots.isEmpty() ? null
-                        : lots.get(0).getPurchasePrice().compareTo(ZERO) > 0
-                                ? computeGainRate(priceKrw, lots.get(0).getPurchasePrice().multiply(lots.get(0).getPurchaseFxRate()))
-                                : null;
+                effectiveGainRate =
+                        lots.isEmpty()
+                                ? null
+                                : lots.get(0).getPurchasePrice().compareTo(ZERO) > 0
+                                        ? computeGainRate(
+                                                priceKrw,
+                                                lots.get(0)
+                                                        .getPurchasePrice()
+                                                        .multiply(lots.get(0).getPurchaseFxRate()))
+                                        : null;
             }
 
             // lot별 consumedQty 매핑 (deques는 이미 소비 완료 상태라 LotEntry에서 읽어야 함)
@@ -277,33 +303,43 @@ public class SellGuideServiceImpl implements SellGuideService {
             // 그런데 deques에서 꺼낸 상태라 접근이 필요 — 별도 Map으로 추적
             List<SellGuideLotDTO> lotDTOs = buildLotDTOs(lots, priceKrw, productId);
 
-            products.add(SellGuideProductDTO.builder()
-                    .foreignProductId(productId)
-                    .ticker(rep.getTicker())
-                    .productName(rep.getName())
-                    .currency(rep.getCurrency())
-                    .currentPriceKrw(priceKrw)
-                    .priceBaseDate(priceBaseDateByProduct.get(productId))
-                    .fxRateBaseDate(fxRateDateByCurrency.get(rep.getCurrency()))
-                    .effectiveGainRate(effectiveGainRate)
-                    .recommendedQty(result != null ? result.recommendedQty : ZERO)
-                    .expectedSellAmount(result != null ? result.expectedSellAmount : ZERO)
-                    .expectedGain(result != null ? result.expectedGain : ZERO)
-                    .weightedGain(result != null ? result.expectedGain.multiply(currentWeight) : ZERO)
-                    .status(status)
-                    .lots(lotDTOs)
-                    .build());
+            products.add(
+                    SellGuideProductDTO.builder()
+                            .foreignProductId(productId)
+                            .ticker(rep.getTicker())
+                            .productName(rep.getName())
+                            .currency(rep.getCurrency())
+                            .currentPriceKrw(priceKrw)
+                            .priceBaseDate(priceBaseDateByProduct.get(productId))
+                            .fxRateBaseDate(fxRateDateByCurrency.get(rep.getCurrency()))
+                            .effectiveGainRate(effectiveGainRate)
+                            .recommendedQty(result != null ? result.recommendedQty : ZERO)
+                            .expectedSellAmount(result != null ? result.expectedSellAmount : ZERO)
+                            .expectedGain(result != null ? result.expectedGain : ZERO)
+                            .weightedGain(
+                                    result != null
+                                            ? result.expectedGain.multiply(currentWeight)
+                                            : ZERO)
+                            .status(status)
+                            .lots(lotDTOs)
+                            .build());
         }
 
         // 정렬: RECOMMENDED 먼저 effectiveGainRate 내림차순, 나머지는 뒤
-        products.sort(Comparator
-                .<SellGuideProductDTO>comparingInt(p -> p.getStatus() == LotRecommendationStatus.RECOMMENDED ? 0 : 1)
-                .thenComparing(Comparator.comparing(
-                        p -> p.getEffectiveGainRate() != null ? p.getEffectiveGainRate() : BigDecimal.valueOf(Long.MIN_VALUE),
-                        Comparator.reverseOrder())));
+        products.sort(
+                Comparator.<SellGuideProductDTO>comparingInt(
+                                p -> p.getStatus() == LotRecommendationStatus.RECOMMENDED ? 0 : 1)
+                        .thenComparing(
+                                Comparator.comparing(
+                                        p ->
+                                                p.getEffectiveGainRate() != null
+                                                        ? p.getEffectiveGainRate()
+                                                        : BigDecimal.valueOf(Long.MIN_VALUE),
+                                        Comparator.reverseOrder())));
 
-        boolean hasRecommended = products.stream()
-                .anyMatch(p -> p.getStatus() == LotRecommendationStatus.RECOMMENDED);
+        boolean hasRecommended =
+                products.stream()
+                        .anyMatch(p -> p.getStatus() == LotRecommendationStatus.RECOMMENDED);
 
         // ── 10. 세액 비교 ─────────────────────────────────────────────────────
         SellGuideSummaryDTO summary = null;
@@ -314,11 +350,13 @@ public class SellGuideServiceImpl implements SellGuideService {
                     taxMapper.selectFinalizedLotsByAccountIdsAndYear(
                             List.of(account.getAccountId()), taxYear, now);
 
-            List<SellLotDTO> virtualLots = buildVirtualLots(
-                    products, lotsByProduct, expectedSettlementDate, priceKrwByProduct);
+            List<SellLotDTO> virtualLots =
+                    buildVirtualLots(
+                            products, lotsByProduct, expectedSettlementDate, priceKrwByProduct);
 
-            List<SellLotDTO> allLots = Stream.concat(existingLots.stream(), virtualLots.stream())
-                    .collect(Collectors.toList());
+            List<SellLotDTO> allLots =
+                    Stream.concat(existingLots.stream(), virtualLots.stream())
+                            .collect(Collectors.toList());
 
             List<ExternalBuyDTO> externalTrades =
                     taxMapper.selectExternalBuysByAccountIdsAndYear(
@@ -330,23 +368,31 @@ public class SellGuideServiceImpl implements SellGuideService {
             TaxCalculationResultDTO withoutRelief =
                     taxCalculator.calculate(allLots, rules, externalTrades, true);
 
-            BigDecimal totalSellAmount = products.stream()
-                    .map(SellGuideProductDTO::getExpectedSellAmount)
-                    .reduce(ZERO, BigDecimal::add);
-            BigDecimal totalWeightedGain = products.stream()
-                    .map(SellGuideProductDTO::getWeightedGain)
-                    .reduce(ZERO, BigDecimal::add);
+            BigDecimal totalSellAmount =
+                    products.stream()
+                            .map(SellGuideProductDTO::getExpectedSellAmount)
+                            .reduce(ZERO, BigDecimal::add);
+            BigDecimal totalWeightedGain =
+                    products.stream()
+                            .map(SellGuideProductDTO::getWeightedGain)
+                            .reduce(ZERO, BigDecimal::add);
 
-            summary = SellGuideSummaryDTO.builder()
-                    .totalRecommendedSellAmount(totalSellAmount)
-                    .totalWeightedGain(totalWeightedGain)
-                    .estimatedTaxWithRelief(withRelief.getFinalTax())
-                    .estimatedTaxWithoutRelief(withoutRelief.getFinalTax())
-                    .estimatedReliefEffect(
-                            withoutRelief.getFinalTax().subtract(withRelief.getFinalTax())
-                                    .max(ZERO))
-                    .taxNote("예상 확정일(" + expectedSettlementDate + ") 기준 예상치. 가정산(PROVISIONAL) 건 미포함.")
-                    .build();
+            summary =
+                    SellGuideSummaryDTO.builder()
+                            .totalRecommendedSellAmount(totalSellAmount)
+                            .totalWeightedGain(totalWeightedGain)
+                            .estimatedTaxWithRelief(withRelief.getFinalTax())
+                            .estimatedTaxWithoutRelief(withoutRelief.getFinalTax())
+                            .estimatedReliefEffect(
+                                    withoutRelief
+                                            .getFinalTax()
+                                            .subtract(withRelief.getFinalTax())
+                                            .max(ZERO))
+                            .taxNote(
+                                    "예상 확정일("
+                                            + expectedSettlementDate
+                                            + ") 기준 예상치. 가정산(PROVISIONAL) 건 미포함.")
+                            .build();
         }
 
         return SellGuideResponseDTO.builder()
@@ -383,8 +429,11 @@ public class SellGuideServiceImpl implements SellGuideService {
                 .filter(r -> !date.isBefore(r.getValidFrom()) && !date.isAfter(r.getValidTo()))
                 .findFirst()
                 .map(r -> TaxCalculations.weightOf(r.getRuleValue()))
-                .orElseThrow(() -> new AppException(ErrorType.TAX_RULE_NOT_FOUND,
-                        "expectedSettlementDate=" + date));
+                .orElseThrow(
+                        () ->
+                                new AppException(
+                                        ErrorType.TAX_RULE_NOT_FOUND,
+                                        "expectedSettlementDate=" + date));
     }
 
     private String buildPeriodLabel(List<TaxRuleDTO> rules, LocalDate date, BigDecimal weight) {
@@ -392,15 +441,23 @@ public class SellGuideServiceImpl implements SellGuideService {
                 .filter(r -> r.getRuleType() == TaxRuleType.RELIEF_RATE)
                 .filter(r -> !date.isBefore(r.getValidFrom()) && !date.isAfter(r.getValidTo()))
                 .findFirst()
-                .map(r -> r.getValidFrom().getMonthValue() + "~"
-                        + r.getValidTo().getMonthValue() + "월 구간 ("
-                        + weight.multiply(BigDecimal.valueOf(100)).stripTrailingZeros().toPlainString() + "%)")
+                .map(
+                        r ->
+                                r.getValidFrom().getMonthValue()
+                                        + "~"
+                                        + r.getValidTo().getMonthValue()
+                                        + "월 구간 ("
+                                        + weight.multiply(BigDecimal.valueOf(100))
+                                                .stripTrailingZeros()
+                                                .toPlainString()
+                                        + "%)")
                 .orElse("구간 정보 없음");
     }
 
     private BigDecimal computeGainRate(BigDecimal currentPriceKrw, BigDecimal purchasePriceKrw) {
         if (currentPriceKrw == null || currentPriceKrw.compareTo(ZERO) <= 0) return null;
-        return currentPriceKrw.subtract(purchasePriceKrw)
+        return currentPriceKrw
+                .subtract(purchasePriceKrw)
                 .divide(currentPriceKrw, 4, RoundingMode.HALF_UP);
     }
 
@@ -416,7 +473,8 @@ public class SellGuideServiceImpl implements SellGuideService {
         BigDecimal priceKrw = priceKrwByProduct.get(productId);
         // 첫 lot 이득율 확인
         HeldLotDTO firstLot = lots.get(0);
-        BigDecimal firstPurchasePriceKrw = firstLot.getPurchasePrice().multiply(firstLot.getPurchaseFxRate());
+        BigDecimal firstPurchasePriceKrw =
+                firstLot.getPurchasePrice().multiply(firstLot.getPurchaseFxRate());
         BigDecimal firstGainRate = computeGainRate(priceKrw, firstPurchasePriceKrw);
 
         if (firstGainRate != null && firstGainRate.compareTo(ZERO) > 0) {
@@ -424,26 +482,38 @@ public class SellGuideServiceImpl implements SellGuideService {
             return LotRecommendationStatus.NOT_RECOMMENDED_LIMIT;
         }
         // 첫 lot이 0 이하 — 뒤에 양의 lot이 있는지 확인
-        boolean hasPositiveLotBehind = lots.stream().skip(1).anyMatch(lot -> {
-            BigDecimal purchasePriceKrw = lot.getPurchasePrice().multiply(lot.getPurchaseFxRate());
-            BigDecimal gainRate = computeGainRate(priceKrw, purchasePriceKrw);
-            return gainRate != null && gainRate.compareTo(ZERO) > 0;
-        });
+        boolean hasPositiveLotBehind =
+                lots.stream()
+                        .skip(1)
+                        .anyMatch(
+                                lot -> {
+                                    BigDecimal purchasePriceKrw =
+                                            lot.getPurchasePrice()
+                                                    .multiply(lot.getPurchaseFxRate());
+                                    BigDecimal gainRate =
+                                            computeGainRate(priceKrw, purchasePriceKrw);
+                                    return gainRate != null && gainRate.compareTo(ZERO) > 0;
+                                });
         return hasPositiveLotBehind
                 ? LotRecommendationStatus.BLOCKED_BY_FIFO
                 : LotRecommendationStatus.EXCLUDED_NEGATIVE_GAIN;
     }
 
     private SellGuideProductDTO buildFailedProduct(HeldLotDTO rep, List<HeldLotDTO> lots) {
-        List<SellGuideLotDTO> lotDTOs = lots.stream()
-                .map(lot -> SellGuideLotDTO.builder()
-                        .inboundDetailId(lot.getInboundDetailId())
-                        .availableQty(lot.getCurrentQty())
-                        .purchasePriceKrw(lot.getPurchasePrice().multiply(lot.getPurchaseFxRate()))
-                        .gainRate(null)
-                        .recommendedQty(ZERO)
-                        .build())
-                .collect(Collectors.toList());
+        List<SellGuideLotDTO> lotDTOs =
+                lots.stream()
+                        .map(
+                                lot ->
+                                        SellGuideLotDTO.builder()
+                                                .inboundDetailId(lot.getInboundDetailId())
+                                                .availableQty(lot.getCurrentQty())
+                                                .purchasePriceKrw(
+                                                        lot.getPurchasePrice()
+                                                                .multiply(lot.getPurchaseFxRate()))
+                                                .gainRate(null)
+                                                .recommendedQty(ZERO)
+                                                .build())
+                        .collect(Collectors.toList());
 
         return SellGuideProductDTO.builder()
                 .foreignProductId(rep.getForeignProductId())
@@ -472,13 +542,14 @@ public class SellGuideServiceImpl implements SellGuideService {
         for (HeldLotDTO lot : lots) {
             BigDecimal purchasePriceKrw = lot.getPurchasePrice().multiply(lot.getPurchaseFxRate());
             BigDecimal gainRate = computeGainRate(priceKrw, purchasePriceKrw);
-            result.add(SellGuideLotDTO.builder()
-                    .inboundDetailId(lot.getInboundDetailId())
-                    .availableQty(lot.getCurrentQty())
-                    .purchasePriceKrw(purchasePriceKrw)
-                    .gainRate(gainRate)
-                    .recommendedQty(ZERO) // 상세 배분은 summary에서 총량으로 확인
-                    .build());
+            result.add(
+                    SellGuideLotDTO.builder()
+                            .inboundDetailId(lot.getInboundDetailId())
+                            .availableQty(lot.getCurrentQty())
+                            .purchasePriceKrw(purchasePriceKrw)
+                            .gainRate(gainRate)
+                            .recommendedQty(ZERO) // 상세 배분은 summary에서 총량으로 확인
+                            .build());
         }
         return result;
     }
@@ -505,24 +576,28 @@ public class SellGuideServiceImpl implements SellGuideService {
                 BigDecimal consumed = qtyLeft.min(lot.getCurrentQty());
                 qtyLeft = qtyLeft.subtract(consumed);
 
-                virtualLots.add(SellLotDTO.builder()
-                        .accountId(null) // TaxCalculator가 accountId를 직접 쓰지 않음
-                        .inboundDetailId(lot.getInboundDetailId())
-                        .sellQty(consumed)
-                        .finalAt(expectedSettlementDate)
-                        .finalAmount(consumed.multiply(priceKrw))
-                        .purchasePrice(lot.getPurchasePrice())
-                        .purchaseFxRate(lot.getPurchaseFxRate())
-                        .productLabel(lot.getProductLabel())
-                        .build());
+                virtualLots.add(
+                        SellLotDTO.builder()
+                                .accountId(null) // TaxCalculator가 accountId를 직접 쓰지 않음
+                                .inboundDetailId(lot.getInboundDetailId())
+                                .sellQty(consumed)
+                                .finalAt(expectedSettlementDate)
+                                .finalAmount(consumed.multiply(priceKrw))
+                                .purchasePrice(lot.getPurchasePrice())
+                                .purchaseFxRate(lot.getPurchaseFxRate())
+                                .productLabel(lot.getProductLabel())
+                                .build());
             }
         }
         return virtualLots;
     }
 
     private SellGuideResponseDTO emptyResponse(
-            BigDecimal remainingLimit, BigDecimal weight, String periodLabel,
-            LocalDate expectedSettlementDate, String warningMsg) {
+            BigDecimal remainingLimit,
+            BigDecimal weight,
+            String periodLabel,
+            LocalDate expectedSettlementDate,
+            String warningMsg) {
         return SellGuideResponseDTO.builder()
                 .remainingLimit(remainingLimit)
                 .currentWeight(weight)
@@ -544,8 +619,11 @@ public class SellGuideServiceImpl implements SellGuideService {
         final BigDecimal gainRate;
         BigDecimal consumedQty = ZERO;
 
-        LotEntry(Long inboundDetailId, BigDecimal workingQty,
-                BigDecimal purchasePriceKrw, BigDecimal gainRate) {
+        LotEntry(
+                Long inboundDetailId,
+                BigDecimal workingQty,
+                BigDecimal purchasePriceKrw,
+                BigDecimal gainRate) {
             this.inboundDetailId = inboundDetailId;
             this.workingQty = workingQty;
             this.purchasePriceKrw = purchasePriceKrw;

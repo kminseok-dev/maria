@@ -28,10 +28,7 @@ public class KisPriceClient {
     private static final int MAX_ATTEMPTS = 3;
     private static final long RETRY_DELAY_MS = 700; // KIS 데모키 초당 호출 제한 회피용
 
-    /**
-     * 전일종가와 기준일을 함께 반환한다.
-     * HHDFS00000300 output에는 날짜 필드가 없으므로 baseDate=null로 반환한다.
-     */
+    /** 전일종가와 기준일을 함께 반환한다. HHDFS00000300 output에는 날짜 필드가 없으므로 baseDate=null로 반환한다. */
     public PriceWithDate getPreviousCloseWithDate(String exchangeCode, String ticker) {
         return new PriceWithDate(getPreviousClose(exchangeCode, ticker), null);
     }
