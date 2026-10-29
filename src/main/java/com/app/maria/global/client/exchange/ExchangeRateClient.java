@@ -36,10 +36,19 @@ public class ExchangeRateClient {
     // currencyUnit = 화폐 단위
     // 날짜를 안넘겨도 되는 편의용 진입점
     public BigDecimal getBaseRate(String currencyUnit) {
-        return getBaseRate(currencyUnit, businessClockService.now().toLocalDate());
+        return fetchWithDate(currencyUnit, businessClockService.now().toLocalDate()).getRate();
     }
 
     public BigDecimal getBaseRate(String currencyUnit, LocalDate searchDate) {
+        return fetchWithDate(currencyUnit, searchDate).getRate();
+    }
+
+    /** 환율과 실제 조회에 성공한 날짜를 함께 반환한다. */
+    public RateWithDate getBaseRateWithDate(String currencyUnit) {
+        return fetchWithDate(currencyUnit, businessClockService.now().toLocalDate());
+    }
+
+    private RateWithDate fetchWithDate(String currencyUnit, LocalDate searchDate) {
         String url =
                 UriComponentsBuilder.fromHttpUrl(exchangeApiProperties.getUrl())
                         .queryParam("authkey", exchangeApiProperties.getApiKey())
@@ -71,13 +80,13 @@ public class ExchangeRateClient {
                         baseRate.divide(new BigDecimal(unitDenomination), 4, RoundingMode.HALF_UP);
             }
 
-            return baseRate;
+            return new RateWithDate(baseRate, searchDate);
         }
 
         // 고시환율 없었던 주말/공휴일 -> 하루 전 날짜 호출해서 최근 영업일 찾음
         // 무한 재귀 방지용
         if (searchDate.isAfter(businessClockService.now().toLocalDate().minusDays(7))) {
-            return getBaseRate(currencyUnit, searchDate.minusDays(1));
+            return fetchWithDate(currencyUnit, searchDate.minusDays(1));
         }
 
         throw new AppException(ErrorType.EXCHANGE_RATE_NOT_FOUND, currencyUnit);

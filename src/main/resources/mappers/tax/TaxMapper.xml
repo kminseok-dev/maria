@@ -139,17 +139,20 @@
             id.inbound_detail_id,
             id.foreign_product_id,
             fp.ticker,
+            fp.name,
             fp.market,
             fp.currency,
             id.purchase_fx_rate,
             id.purchase_price,
             id.current_qty,
+            id.purchase_date,
             concat(fp.ticker, ' ', fp.name) as product_label
         from inbound_detail id
         join inbound i on i.inbound_id = id.inbound_id
         join foreign_product fp on fp.foreign_product_id = id.foreign_product_id
         where i.account_id = #{accountId}
             and id.current_qty > 0
+        order by id.purchase_date asc, id.inbound_detail_id asc
     </select>
 
     <select id="countUnconfirmedFinalReport" resultType="int">
