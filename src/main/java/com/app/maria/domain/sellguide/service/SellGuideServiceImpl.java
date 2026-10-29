@@ -8,7 +8,6 @@ import com.app.maria.domain.sellguide.dto.response.SellGuideLotDTO;
 import com.app.maria.domain.sellguide.dto.response.SellGuideProductDTO;
 import com.app.maria.domain.sellguide.dto.response.SellGuideResponseDTO;
 import com.app.maria.domain.sellguide.dto.response.SellGuideSummaryDTO;
-import com.app.maria.domain.sellguide.type.LotRecommendationStatus;
 import com.app.maria.domain.sellorder.service.SellLimitService;
 import com.app.maria.domain.tax.dto.ExternalBuyDTO;
 import com.app.maria.domain.tax.dto.HeldLotDTO;
@@ -274,33 +273,12 @@ public class SellGuideServiceImpl implements SellGuideService {
             }
 
             ProductResult result = productResults.get(productId);
-            LotRecommendationStatus status =
-                    determineStatus(productId, lots, priceKrwByProduct, result);
+            boolean recommended = result != null && result.recommendedQty.compareTo(ZERO) > 0;
 
-            BigDecimal effectiveGainRate;
-            if (status == LotRecommendationStatus.RECOMMENDED) {
-                effectiveGainRate =
-                        result.expectedSellAmount.compareTo(ZERO) > 0
-                                ? result.expectedGain.divide(
-                                        result.expectedSellAmount, 4, RoundingMode.HALF_UP)
-                                : null;
-            } else {
-                // 첫 lot의 gainRate (표시용)
-                effectiveGainRate =
-                        lots.isEmpty()
-                                ? null
-                                : lots.get(0).getPurchasePrice().compareTo(ZERO) > 0
-                                        ? computeGainRate(
-                                                priceKrw,
-                                                lots.get(0)
-                                                        .getPurchasePrice()
-                                                        .multiply(lots.get(0).getPurchaseFxRate()))
-                                        : null;
-            }
+            BigDecimal effectiveGainRate = recommended && result.expectedSellAmount.compareTo(ZERO) > 0
+                    ? result.expectedGain.divide(result.expectedSellAmount, 4, RoundingMode.HALF_UP)
+                    : null;
 
-            // lot별 consumedQty 매핑 (deques는 이미 소비 완료 상태라 LotEntry에서 읽어야 함)
-            // lot별 consumed qty는 별도로 추적했음 (LotEntry.consumedQty)
-            // 그런데 deques에서 꺼낸 상태라 접근이 필요 — 별도 Map으로 추적
             List<SellGuideLotDTO> lotDTOs = buildLotDTOs(lots, priceKrw, productId);
 
             products.add(
@@ -316,30 +294,23 @@ public class SellGuideServiceImpl implements SellGuideService {
                             .recommendedQty(result != null ? result.recommendedQty : ZERO)
                             .expectedSellAmount(result != null ? result.expectedSellAmount : ZERO)
                             .expectedGain(result != null ? result.expectedGain : ZERO)
-                            .weightedGain(
-                                    result != null
-                                            ? result.expectedGain.multiply(currentWeight)
-                                            : ZERO)
-                            .status(status)
+                            .weightedGain(result != null ? result.expectedGain.multiply(currentWeight) : ZERO)
+                            .recommended(recommended)
                             .lots(lotDTOs)
                             .build());
         }
 
-        // 정렬: RECOMMENDED 먼저 effectiveGainRate 내림차순, 나머지는 뒤
+        // 정렬: 추천 먼저, effectiveGainRate 내림차순
         products.sort(
-                Comparator.<SellGuideProductDTO>comparingInt(
-                                p -> p.getStatus() == LotRecommendationStatus.RECOMMENDED ? 0 : 1)
+                Comparator.<SellGuideProductDTO>comparingInt(p -> p.isRecommended() ? 0 : 1)
                         .thenComparing(
                                 Comparator.comparing(
-                                        p ->
-                                                p.getEffectiveGainRate() != null
-                                                        ? p.getEffectiveGainRate()
-                                                        : BigDecimal.valueOf(Long.MIN_VALUE),
+                                        p -> p.getEffectiveGainRate() != null
+                                                ? p.getEffectiveGainRate()
+                                                : BigDecimal.valueOf(Long.MIN_VALUE),
                                         Comparator.reverseOrder())));
 
-        boolean hasRecommended =
-                products.stream()
-                        .anyMatch(p -> p.getStatus() == LotRecommendationStatus.RECOMMENDED);
+        boolean hasRecommended = products.stream().anyMatch(SellGuideProductDTO::isRecommended);
 
         // ── 10. 세액 비교 ─────────────────────────────────────────────────────
         SellGuideSummaryDTO summary = null;
@@ -461,44 +432,6 @@ public class SellGuideServiceImpl implements SellGuideService {
                 .divide(currentPriceKrw, 4, RoundingMode.HALF_UP);
     }
 
-    private LotRecommendationStatus determineStatus(
-            Long productId,
-            List<HeldLotDTO> lots,
-            Map<Long, BigDecimal> priceKrwByProduct,
-            ProductResult result) {
-
-        if (result != null && result.recommendedQty.compareTo(ZERO) > 0) {
-            return LotRecommendationStatus.RECOMMENDED;
-        }
-        BigDecimal priceKrw = priceKrwByProduct.get(productId);
-        // 첫 lot 이득율 확인
-        HeldLotDTO firstLot = lots.get(0);
-        BigDecimal firstPurchasePriceKrw =
-                firstLot.getPurchasePrice().multiply(firstLot.getPurchaseFxRate());
-        BigDecimal firstGainRate = computeGainRate(priceKrw, firstPurchasePriceKrw);
-
-        if (firstGainRate != null && firstGainRate.compareTo(ZERO) > 0) {
-            // 양의 이득인데 추천 수량 0 → 한도 소진
-            return LotRecommendationStatus.NOT_RECOMMENDED_LIMIT;
-        }
-        // 첫 lot이 0 이하 — 뒤에 양의 lot이 있는지 확인
-        boolean hasPositiveLotBehind =
-                lots.stream()
-                        .skip(1)
-                        .anyMatch(
-                                lot -> {
-                                    BigDecimal purchasePriceKrw =
-                                            lot.getPurchasePrice()
-                                                    .multiply(lot.getPurchaseFxRate());
-                                    BigDecimal gainRate =
-                                            computeGainRate(priceKrw, purchasePriceKrw);
-                                    return gainRate != null && gainRate.compareTo(ZERO) > 0;
-                                });
-        return hasPositiveLotBehind
-                ? LotRecommendationStatus.BLOCKED_BY_FIFO
-                : LotRecommendationStatus.EXCLUDED_NEGATIVE_GAIN;
-    }
-
     private SellGuideProductDTO buildFailedProduct(HeldLotDTO rep, List<HeldLotDTO> lots) {
         List<SellGuideLotDTO> lotDTOs =
                 lots.stream()
@@ -528,7 +461,7 @@ public class SellGuideServiceImpl implements SellGuideService {
                 .expectedSellAmount(ZERO)
                 .expectedGain(ZERO)
                 .weightedGain(ZERO)
-                .status(LotRecommendationStatus.EXCLUDED_PRICE_FETCH_FAILED)
+                .recommended(false)
                 .lots(lotDTOs)
                 .build();
     }
@@ -563,7 +496,7 @@ public class SellGuideServiceImpl implements SellGuideService {
 
         List<SellLotDTO> virtualLots = new ArrayList<>();
         for (SellGuideProductDTO product : products) {
-            if (product.getStatus() != LotRecommendationStatus.RECOMMENDED) continue;
+            if (!product.isRecommended()) continue;
 
             BigDecimal priceKrw = priceKrwByProduct.get(product.getForeignProductId());
             BigDecimal qtyLeft = product.getRecommendedQty();
