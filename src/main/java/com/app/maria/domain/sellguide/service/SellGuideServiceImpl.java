@@ -275,9 +275,11 @@ public class SellGuideServiceImpl implements SellGuideService {
             ProductResult result = productResults.get(productId);
             boolean recommended = result != null && result.recommendedQty.compareTo(ZERO) > 0;
 
-            BigDecimal effectiveGainRate = recommended && result.expectedSellAmount.compareTo(ZERO) > 0
-                    ? result.expectedGain.divide(result.expectedSellAmount, 4, RoundingMode.HALF_UP)
-                    : null;
+            BigDecimal effectiveGainRate =
+                    recommended && result.expectedSellAmount.compareTo(ZERO) > 0
+                            ? result.expectedGain.divide(
+                                    result.expectedSellAmount, 4, RoundingMode.HALF_UP)
+                            : null;
 
             List<SellGuideLotDTO> lotDTOs = buildLotDTOs(lots, priceKrw, productId);
 
@@ -294,7 +296,10 @@ public class SellGuideServiceImpl implements SellGuideService {
                             .recommendedQty(result != null ? result.recommendedQty : ZERO)
                             .expectedSellAmount(result != null ? result.expectedSellAmount : ZERO)
                             .expectedGain(result != null ? result.expectedGain : ZERO)
-                            .weightedGain(result != null ? result.expectedGain.multiply(currentWeight) : ZERO)
+                            .weightedGain(
+                                    result != null
+                                            ? result.expectedGain.multiply(currentWeight)
+                                            : ZERO)
                             .recommended(recommended)
                             .lots(lotDTOs)
                             .build());
@@ -305,9 +310,10 @@ public class SellGuideServiceImpl implements SellGuideService {
                 Comparator.<SellGuideProductDTO>comparingInt(p -> p.isRecommended() ? 0 : 1)
                         .thenComparing(
                                 Comparator.comparing(
-                                        p -> p.getEffectiveGainRate() != null
-                                                ? p.getEffectiveGainRate()
-                                                : BigDecimal.valueOf(Long.MIN_VALUE),
+                                        p ->
+                                                p.getEffectiveGainRate() != null
+                                                        ? p.getEffectiveGainRate()
+                                                        : BigDecimal.valueOf(Long.MIN_VALUE),
                                         Comparator.reverseOrder())));
 
         boolean hasRecommended = products.stream().anyMatch(SellGuideProductDTO::isRecommended);
