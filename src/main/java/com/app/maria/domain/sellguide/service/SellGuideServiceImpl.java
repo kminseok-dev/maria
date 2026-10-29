@@ -207,6 +207,7 @@ public class SellGuideServiceImpl implements SellGuideService {
             productResults.put(productId, new ProductResult());
         }
 
+        Map<Long, BigDecimal> consumedByLotId = new HashMap<>(); // inboundDetailId → 소비 수량
         BigDecimal workingRemainingLimit = remainingLimit;
 
         outer:
@@ -246,6 +247,7 @@ public class SellGuideServiceImpl implements SellGuideService {
 
             productResults.get(bestProductId).add(recommendedQty, actualDeducted, gain);
             bestLot.consumedQty = bestLot.consumedQty.add(recommendedQty);
+            consumedByLotId.merge(bestLot.inboundDetailId, recommendedQty, BigDecimal::add);
             workingRemainingLimit = workingRemainingLimit.subtract(actualDeducted);
 
             BigDecimal remaining = bestLot.workingQty.subtract(recommendedQty);
@@ -281,7 +283,7 @@ public class SellGuideServiceImpl implements SellGuideService {
                                     result.expectedSellAmount, 4, RoundingMode.HALF_UP)
                             : null;
 
-            List<SellGuideLotDTO> lotDTOs = buildLotDTOs(lots, priceKrw, productId);
+            List<SellGuideLotDTO> lotDTOs = buildLotDTOs(lots, priceKrw, consumedByLotId);
 
             products.add(
                     SellGuideProductDTO.builder()
@@ -473,11 +475,8 @@ public class SellGuideServiceImpl implements SellGuideService {
     }
 
     private List<SellGuideLotDTO> buildLotDTOs(
-            List<HeldLotDTO> lots, BigDecimal priceKrw, Long productId) {
+            List<HeldLotDTO> lots, BigDecimal priceKrw, Map<Long, BigDecimal> consumedByLotId) {
         List<SellGuideLotDTO> result = new ArrayList<>();
-        // consumedQty는 LotEntry에 저장했으나 deques는 이미 소비됨
-        // lots와 동일 순서로 iterate하면서 consumed는 0으로 초기화 (FIFO 표시 목적)
-        // 정확한 consumedQty는 ProductResult에서 총량만 알 수 있음 — lot별 배분은 표시용으로 간략화
         for (HeldLotDTO lot : lots) {
             BigDecimal purchasePriceKrw = lot.getPurchasePrice().multiply(lot.getPurchaseFxRate());
             BigDecimal gainRate = computeGainRate(priceKrw, purchasePriceKrw);
@@ -487,7 +486,7 @@ public class SellGuideServiceImpl implements SellGuideService {
                             .availableQty(lot.getCurrentQty())
                             .purchasePriceKrw(purchasePriceKrw)
                             .gainRate(gainRate)
-                            .recommendedQty(ZERO) // 상세 배분은 summary에서 총량으로 확인
+                            .recommendedQty(consumedByLotId.getOrDefault(lot.getInboundDetailId(), ZERO))
                             .build());
         }
         return result;
