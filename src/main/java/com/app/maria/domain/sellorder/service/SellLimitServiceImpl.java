@@ -1,5 +1,6 @@
 package com.app.maria.domain.sellorder.service;
 
+import com.app.maria.domain.account.mapper.AccountMapper;
 import com.app.maria.domain.sellorder.mapper.SellLimitMapper;
 import com.app.maria.global.client.mydata.MydataClient;
 import com.app.maria.global.exception.AppException;
@@ -18,6 +19,7 @@ public class SellLimitServiceImpl implements SellLimitService {
 
     private final SellLimitMapper sellLimitMapper;
     private final MydataClient mydataClient;
+    private final AccountMapper accountMapper;
 
     @Override
     public boolean isWithinSellLimit(Long accountId, BigDecimal orderAmount) {
@@ -52,5 +54,34 @@ public class SellLimitServiceImpl implements SellLimitService {
         boolean withinGlobalCap = globalTotal.compareTo(MAX_TOTAL_SELL_LIMIT) <= 0;
 
         return withinAccountLimit && withinGlobalCap;
+    }
+
+    @Override
+    public BigDecimal getRemainingLimit(Long accountId) {
+        String ciHash =
+                sellLimitMapper
+                        .selectCiHashByAccountId(accountId)
+                        .orElseThrow(
+                                () ->
+                                        new AppException(
+                                                ErrorType.SELL_ORDER_CUSTOMER_NOT_FOUND,
+                                                accountId));
+
+        // 조회 실패 시 AppException 전파 — 한도 불명 상태에서 추천 반환하지 않음
+        BigDecimal externalSum = mydataClient.getExternalSellTotal(ciHash);
+
+        BigDecimal limitAmount =
+                accountMapper
+                        .selectByAccountId(accountId)
+                        .orElseThrow(() -> new AppException(ErrorType.ACCOUNT_NOT_FOUND, accountId))
+                        .getLimitAmount();
+
+        BigDecimal usedAmount = sellLimitMapper.sumUsedAmount(accountId);
+
+        return MAX_TOTAL_SELL_LIMIT
+                .subtract(usedAmount)
+                .subtract(externalSum)
+                .min(limitAmount.subtract(usedAmount))
+                .max(BigDecimal.ZERO);
     }
 }

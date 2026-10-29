@@ -198,4 +198,18 @@ class KisPriceClientTest {
                 .isInstanceOf(AppException.class)
                 .hasMessage(ErrorType.KIS_PRICE_NOT_FOUND.getMessage());
     }
+
+    @Test
+    void getPreviousCloseWithDate_price를_반환하고_baseDate는_null이다() throws Exception {
+        when(kisTokenService.getAccessToken()).thenReturn("token-value");
+        JsonNode response = json("{\"output\":{\"base\":\"308.9100\"},\"rt_cd\":\"0\"}");
+        when(restTemplate.exchange(
+                        anyString(), eq(HttpMethod.GET), any(HttpEntity.class), eq(JsonNode.class)))
+                .thenReturn(new ResponseEntity<>(response, HttpStatus.OK));
+
+        PriceWithDate result = kisPriceClient.getPreviousCloseWithDate("NAS", "AAPL");
+
+        assertThat(result.getPrice()).isEqualByComparingTo("308.9100");
+        assertThat(result.getBaseDate()).isNull(); // HHDFS00000300 output에 날짜 필드 없음
+    }
 }
