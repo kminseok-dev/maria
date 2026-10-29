@@ -30,11 +30,9 @@ public class KisPriceClient {
 
     /**
      * 전일종가와 기준일을 함께 반환한다.
-     * KIS 응답 본문에서 기준일을 확인할 수 없으므로 baseDate=null로 반환한다.
-     * 추후 KIS 응답에 날짜 필드가 확인되면 이 메서드를 보완한다.
+     * HHDFS00000300 output에는 날짜 필드가 없으므로 baseDate=null로 반환한다.
      */
     public PriceWithDate getPreviousCloseWithDate(String exchangeCode, String ticker) {
-        // ponytail: KIS 응답(output.base)에 날짜 필드 없음 확인 필요 — 확인 전까지 null 반환
         return new PriceWithDate(getPreviousClose(exchangeCode, ticker), null);
     }
 
