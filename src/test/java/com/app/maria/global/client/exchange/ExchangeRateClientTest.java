@@ -185,4 +185,32 @@ class ExchangeRateClientTest {
         assertThat(urlCaptor.getValue())
                 .contains("searchdate=" + LocalDate.now().format(DATE_FORMAT));
     }
+
+    @Test
+    void getBaseRateWithDate_환율과_실제조회날짜를_함께_반환한다() throws Exception {
+        LocalDate today = LocalDate.now();
+        JsonNode response = json("[{\"cur_unit\":\"USD\",\"deal_bas_r\":\"1,433.6\"}]");
+        when(restTemplate.getForObject(anyString(), eq(JsonNode.class))).thenReturn(response);
+
+        RateWithDate result = exchangeRateClient.getBaseRateWithDate("USD");
+
+        assertThat(result.getRate()).isEqualByComparingTo("1433.6");
+        assertThat(result.getBaseDate()).isEqualTo(today);
+    }
+
+    @Test
+    void getBaseRateWithDate_주말이면_소급한_날짜를_baseDate로_반환한다() throws Exception {
+        LocalDate today = LocalDate.now();
+        LocalDate yesterday = today.minusDays(1);
+        JsonNode empty = json("[]");
+        JsonNode found = json("[{\"cur_unit\":\"USD\",\"deal_bas_r\":\"1,420.5\"}]");
+        when(restTemplate.getForObject(anyString(), eq(JsonNode.class)))
+                .thenReturn(empty)
+                .thenReturn(found);
+
+        RateWithDate result = exchangeRateClient.getBaseRateWithDate("USD");
+
+        assertThat(result.getRate()).isEqualByComparingTo("1420.5");
+        assertThat(result.getBaseDate()).isEqualTo(yesterday);
+    }
 }
