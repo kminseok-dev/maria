@@ -486,7 +486,8 @@ public class SellGuideServiceImpl implements SellGuideService {
                             .availableQty(lot.getCurrentQty())
                             .purchasePriceKrw(purchasePriceKrw)
                             .gainRate(gainRate)
-                            .recommendedQty(consumedByLotId.getOrDefault(lot.getInboundDetailId(), ZERO))
+                            .recommendedQty(
+                                    consumedByLotId.getOrDefault(lot.getInboundDetailId(), ZERO))
                             .build());
         }
         return result;
