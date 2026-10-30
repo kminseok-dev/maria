@@ -50,6 +50,7 @@ public class SystemClockManagementServiceImpl implements SystemClockManagementSe
                         .beforeValue(currentClock.getCurrentDatetime().toString())
                         .afterValue(newDatetime.toString())
                         .reasonCode(reasonCode)
+                        .processedAt(newDatetime)
                         .build();
         auditLogService.log(auditLog);
 

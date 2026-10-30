@@ -25,7 +25,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
     private final CiHasher ciHasher;
-    private final BusinessClockService clock;
+    private final BusinessClockService businessClockService;
 
     @Override
     @Transactional(transactionManager = "jpaTransactionManager")
@@ -42,7 +42,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                         request.getPassword(), credential.getPassword().getPasswordHash())) {
             throw new AppException(ErrorType.CUSTOMER_LOGIN_FAILED);
         }
-        credential.markLoggedIn(clock.now());
+        credential.markLoggedIn(businessClockService.now());
         CustomerEntity customer = credential.getCustomer();
         return new CustomerPrincipal(
                 customer.getCustomerId(), credential.getLoginId(), customer.getName());
@@ -67,7 +67,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                                                             request.getName(),
                                                             request.getBirthDate(),
                                                             ciHash,
-                                                            clock.now())));
+                                                            businessClockService.now())));
             CustomerAuthEntity auth =
                     customerAuthRepository.saveAndFlush(
                             CustomerAuthEntity.newLocal(

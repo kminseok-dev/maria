@@ -99,7 +99,7 @@ class SystemClockManagementServiceImplTest {
         assertThat(savedLog.getBeforeValue()).isEqualTo(currentDatetime.toString());
         assertThat(savedLog.getAfterValue()).isEqualTo(newDatetime.toString());
         assertThat(savedLog.getReasonCode()).isEqualTo(reasonCode);
-        assertThat(savedLog.getProcessedAt()).isNull();
+        assertThat(savedLog.getProcessedAt()).isEqualTo(newDatetime);
         assertThat(result).isEqualTo(newDatetime);
 
         InOrder callOrder = inOrder(systemClockMapper, auditLogService);

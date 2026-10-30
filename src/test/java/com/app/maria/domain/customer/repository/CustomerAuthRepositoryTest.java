@@ -120,7 +120,7 @@ class CustomerAuthRepositoryTest {
     }
 
     @Test
-    @DisplayName("로그인에 성공하면 마지막 로그인 시각을 실제 시각으로 갱신한다")
+    @DisplayName("로그인에 성공하면 마지막 로그인 시각을 업무시각으로 갱신한다")
     void updatesLastLoginAtOnSuccess() {
         insertAuth(10, "customer1", "LOCAL", true);
 

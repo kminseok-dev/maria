@@ -76,7 +76,8 @@ class SystemClockIntegrationTest {
         businessClockService = new BusinessClockServiceImpl(systemClockMapper);
         systemClockManagementService =
                 new SystemClockManagementServiceImpl(
-                        systemClockMapper, new AuditLogServiceImpl(auditLogMapper, businessClockService));
+                        systemClockMapper,
+                        new AuditLogServiceImpl(auditLogMapper, businessClockService));
     }
 
     @Test
