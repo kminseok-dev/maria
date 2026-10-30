@@ -305,7 +305,7 @@ CREATE TABLE external_trade_sync_cursor (
                                             cursor_id              BIGINT   NOT NULL AUTO_INCREMENT,
                                             customer_id            BIGINT   NOT NULL COMMENT '동기화 대상 고객',
                                             last_synced_trade_date DATE     NULL     COMMENT '마지막으로 처리한 거래의 trade_date. 다음 동기화 시 MydataTradeRequestDTO.fromDate로 사용(경계일 중복은 judge() 전 존재확인으로 방지)',
-                                            updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '커서 갱신 시각',
+                                            updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '커서 갱신 시각(업무시계 기준으로 앱이 넣는다)',
                                             PRIMARY KEY (cursor_id),
                                             UNIQUE KEY uk_external_trade_sync_cursor__customer (customer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='G1 mydata 거래 동기화 커서(고객별 마지막 처리 거래일)';
@@ -688,30 +688,32 @@ CREATE TABLE community_post (
     community_post_id BIGINT       NOT NULL AUTO_INCREMENT,
     ticker            VARCHAR(20)  NULL     COMMENT '종목 토론이면 종목코드, 일반 글이면 NULL',
     customer_id       BIGINT       NOT NULL COMMENT '작성자(응답에는 닉네임만)',
-    title             VARCHAR(100) NOT NULL,
-    content           TEXT         NOT NULL,
-    ask_kiru          BOOLEAN      NOT NULL DEFAULT FALSE,
+    content           TEXT         NOT NULL COMMENT '본문 1~500자(앱에서 검사). 제목 없음',
+    kiru_status       VARCHAR(15)  NULL     COMMENT '본문에 @끼루가 있을 때 호출 상태. NULL=호출 안 함',
     status            VARCHAR(10)  NOT NULL DEFAULT 'VISIBLE' COMMENT 'VISIBLE/HIDDEN/DELETED',
-    created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '업무시계 기준으로 앱이 넣는다',
+    edited_at         DATETIME     NULL     COMMENT '본문을 수정한 시각(수정됨 표시). NULL=수정 안 함',
     PRIMARY KEY (community_post_id),
-    CONSTRAINT chk_cp_status CHECK (status IN ('VISIBLE','HIDDEN','DELETED'))
+    CONSTRAINT chk_cp_status CHECK (status IN ('VISIBLE','HIDDEN','DELETED')),
+    CONSTRAINT chk_cp_kiru CHECK (kiru_status IS NULL OR kiru_status IN ('PENDING','ANSWERED','NO_SOURCE','OUT_OF_SCOPE','FAILED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='채팅방(종목 토론) 글';
 
 -- [NO-SEED] 2차 신규(서비스가 생성). 생성기 무관.
 CREATE TABLE community_comment (
     community_comment_id BIGINT      NOT NULL AUTO_INCREMENT,
     community_post_id    BIGINT      NOT NULL,
-    parent_comment_id    BIGINT      NULL     COMMENT '대댓글이면 부모(1단계까지)',
+    parent_comment_id    BIGINT      NULL     COMMENT '답하는 대상 댓글(중첩 아님, 목록은 평면). 글에 직접 단 댓글·글 본문 호출 끼루 답은 NULL',
     author_type          VARCHAR(10) NOT NULL COMMENT 'CUSTOMER/AI',
     customer_id          BIGINT      NULL,
     content              TEXT        NOT NULL,
     sources_json         TEXT        NULL     COMMENT 'AI 답글 근거 목록',
+    kiru_status          VARCHAR(15) NULL     COMMENT '이 댓글에 @끼루가 있을 때 호출 상태. NULL=호출 안 함',
     status               VARCHAR(10) NOT NULL DEFAULT 'VISIBLE',
     created_at           DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (community_comment_id),
     CONSTRAINT chk_cc_author CHECK ((author_type = 'CUSTOMER' AND customer_id IS NOT NULL) OR (author_type = 'AI' AND customer_id IS NULL)),
-    CONSTRAINT chk_cc_status CHECK (status IN ('VISIBLE','HIDDEN','DELETED'))
+    CONSTRAINT chk_cc_status CHECK (status IN ('VISIBLE','HIDDEN','DELETED')),
+    CONSTRAINT chk_cc_kiru CHECK (kiru_status IS NULL OR kiru_status IN ('PENDING','ANSWERED','NO_SOURCE','OUT_OF_SCOPE','FAILED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='채팅방 댓글';
 
 -- [NO-SEED] 2차 신규(서비스가 생성). 생성기 무관.
