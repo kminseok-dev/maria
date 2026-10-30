@@ -76,7 +76,7 @@ class SystemClockIntegrationTest {
         businessClockService = new BusinessClockServiceImpl(systemClockMapper);
         systemClockManagementService =
                 new SystemClockManagementServiceImpl(
-                        systemClockMapper, new AuditLogServiceImpl(auditLogMapper));
+                        systemClockMapper, new AuditLogServiceImpl(auditLogMapper, businessClockService));
     }
 
     @Test
@@ -115,13 +115,9 @@ class SystemClockIntegrationTest {
         assertThat(datetimeBeforeChange)
                 .isBetween(INITIAL_DATETIME, INITIAL_DATETIME.plusSeconds(2));
 
-        LocalDateTime actualTimeBeforeChange = LocalDateTime.now();
-
         LocalDateTime changedDatetime =
                 systemClockManagementService.changeSystemTime(
                         adminId, new SystemClockChangeRequestDTO(requestedDatetime, reasonCode));
-
-        LocalDateTime actualTimeAfterChange = LocalDateTime.now();
 
         assertThat(changedDatetime).isEqualTo(requestedDatetime);
 
@@ -152,9 +148,7 @@ class SystemClockIntegrationTest {
             assertThat(resultSet.getString("after_value")).isEqualTo(requestedDatetime.toString());
             assertThat(resultSet.getString("reason_code")).isEqualTo(reasonCode);
             assertThat(resultSet.getObject("processed_at", LocalDateTime.class))
-                    .isBetween(
-                            actualTimeBeforeChange.minusSeconds(1),
-                            actualTimeAfterChange.plusSeconds(1));
+                    .isBetween(requestedDatetime, requestedDatetime.plusSeconds(2));
             assertThat(resultSet.next()).isFalse();
         }
     }

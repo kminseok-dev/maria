@@ -134,6 +134,7 @@ public class ExternalTradeSyncServiceImpl implements ExternalTradeSyncService {
                     ExternalTradeSyncCursorDTO.builder()
                             .customerId(customer.getCustomerId())
                             .lastSyncedTradeDate(cursor)
+                            .updatedAt(businessClockService.now())
                             .build());
         }
         return new CustomerSyncResult(newJudgementIds, skippedCount, permanentlyFailedCount);

@@ -1,9 +1,11 @@
 package com.app.maria.domain.customer;
 
 import com.app.maria.domain.customer.service.CiHasher;
+import com.app.maria.global.clock.service.BusinessClockService;
 import com.app.maria.global.config.properties.CiProperties;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +18,11 @@ public class CustomerAuthTestBeans {
     @Bean
     public Clock clock() {
         return Clock.fixed(NOW, ZoneId.of("Asia/Seoul"));
+    }
+
+    @Bean
+    public BusinessClockService businessClockService() {
+        return () -> LocalDateTime.ofInstant(NOW, ZoneId.of("Asia/Seoul"));
     }
 
     @Bean

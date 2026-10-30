@@ -11,11 +11,11 @@
     </select>
 
     <insert id="upsertCursor" parameterType="ExternalTradeSyncCursorDTO">
-        INSERT INTO external_trade_sync_cursor (customer_id, last_synced_trade_date)
-        VALUES (#{customerId}, #{lastSyncedTradeDate})
+        INSERT INTO external_trade_sync_cursor (customer_id, last_synced_trade_date, updated_at)
+        VALUES (#{customerId}, #{lastSyncedTradeDate}, COALESCE(#{updatedAt}, CURRENT_TIMESTAMP))
         ON DUPLICATE KEY UPDATE
         last_synced_trade_date = VALUES(last_synced_trade_date),
-        updated_at = CURRENT_TIMESTAMP
+        updated_at = VALUES(updated_at)
     </insert>
 
 </mapper>

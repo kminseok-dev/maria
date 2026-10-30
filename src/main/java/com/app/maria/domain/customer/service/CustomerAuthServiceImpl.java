@@ -7,11 +7,10 @@ import com.app.maria.domain.customer.entity.CustomerAuthEntity.AuthType;
 import com.app.maria.domain.customer.entity.CustomerEntity;
 import com.app.maria.domain.customer.repository.CustomerAuthRepository;
 import com.app.maria.domain.customer.repository.CustomerRepository;
+import com.app.maria.global.clock.service.BusinessClockService;
 import com.app.maria.global.exception.AppException;
 import com.app.maria.global.exception.ErrorType;
 import com.app.maria.global.security.customer.CustomerPrincipal;
-import java.time.Clock;
-import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,7 +25,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
     private final CiHasher ciHasher;
-    private final Clock clock;
+    private final BusinessClockService clock;
 
     @Override
     @Transactional(transactionManager = "jpaTransactionManager")
@@ -43,7 +42,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                         request.getPassword(), credential.getPassword().getPasswordHash())) {
             throw new AppException(ErrorType.CUSTOMER_LOGIN_FAILED);
         }
-        credential.markLoggedIn(LocalDateTime.now(clock));
+        credential.markLoggedIn(clock.now());
         CustomerEntity customer = credential.getCustomer();
         return new CustomerPrincipal(
                 customer.getCustomerId(), credential.getLoginId(), customer.getName());
@@ -68,7 +67,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                                                             request.getName(),
                                                             request.getBirthDate(),
                                                             ciHash,
-                                                            LocalDateTime.now(clock))));
+                                                            clock.now())));
             CustomerAuthEntity auth =
                     customerAuthRepository.saveAndFlush(
                             CustomerAuthEntity.newLocal(

@@ -17,8 +17,8 @@ import com.app.maria.global.config.TransactionConfig;
 import com.app.maria.global.exception.AppException;
 import com.app.maria.global.exception.ErrorType;
 import com.app.maria.global.security.customer.CustomerPrincipal;
-import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -180,7 +180,7 @@ class CustomerSignupServiceTest {
                         customerRepository,
                         passwordEncoder,
                         ciHasher,
-                        Clock.systemDefaultZone());
+                        LocalDateTime::now);
 
         assertThatThrownBy(() -> racing.signup(request("hong1234", "홍길동", BIRTH)))
                 .isInstanceOfSatisfying(

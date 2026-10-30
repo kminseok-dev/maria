@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.app.maria.global.audit.dto.AuditLogDTO;
 import com.app.maria.global.audit.dto.AuditLogSearchDTO;
 import com.app.maria.global.audit.dto.request.AuditLogSearchRequestDTO;
+import com.app.maria.global.clock.service.BusinessClockService;
 import com.app.maria.global.audit.dto.response.AuditLogResponseDTO;
 import com.app.maria.global.audit.mapper.AuditLogMapper;
 import com.app.maria.global.exception.AppException;
@@ -28,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AuditLogServiceImplTest {
 
     @Mock AuditLogMapper auditLogMapper;
+    @Mock BusinessClockService businessClockService;
 
     @InjectMocks AuditLogServiceImpl auditLogService;
 
@@ -42,6 +44,20 @@ class AuditLogServiceImplTest {
                 .reasonCode("ADMIN_ROLE_UPDATE")
                 .processedAt(LocalDateTime.of(2026, 8, 10, 10, 0))
                 .build();
+    }
+
+    @Test
+    @DisplayName("처리시각이 없으면 DB 실제 시각 대신 업무시계로 채워 저장한다")
+    void logFillsProcessedAtWithBusinessClockWhenMissing() {
+        LocalDateTime businessNow = LocalDateTime.of(2026, 11, 30, 9, 0);
+        when(businessClockService.now()).thenReturn(businessNow);
+        AuditLogDTO auditLog = auditLog(1L, 1L, "ADMIN_USER", "2");
+        auditLog.setProcessedAt(null);
+        when(auditLogMapper.insertLog(auditLog)).thenReturn(1);
+
+        auditLogService.log(auditLog);
+
+        assertThat(auditLog.getProcessedAt()).isEqualTo(businessNow);
     }
 
     @Test
