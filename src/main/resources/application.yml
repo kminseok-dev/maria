@@ -92,6 +92,8 @@ custom:
     trading-hours-path: ${RISK_TRADING_HOURS_PATH:}
     # Must match Python calendar-status.calendarVersion for the identical bytes.
     expected-calendar-version: ${RISK_CALENDAR_VERSION:}
+    # false면 위험등급 기준일이 며칠 지났는지 보지 않고 등급이 있으면 그대로 쓴다(risk 배치를 안 돌리는 시연 환경용)
+    freshness-check: ${RISK_FRESHNESS_CHECK:true}
     sync-enabled: ${RISK_SYNC_ENABLED:false}
     poll-interval: ${RISK_POLL_INTERVAL:PT5M}
     retry-delay: ${RISK_RETRY_DELAY:PT1M}

@@ -145,4 +145,41 @@ class RiskGradeServiceTest {
         assertThatThrownBy(() -> service.findUsableByTickers(java.util.Set.of("005930")))
                 .isInstanceOf(AppException.class);
     }
+
+    @Test
+    void freshnessCheckOffKeepsExpiredGradesUsableAsCurrentWithoutTheCalendar() throws Exception {
+        // 실제 날짜가 priceTo(2026-10-23)에서 4거래일 지난 뒤라 켜짐이면 만료다.
+        var clock = RiskTestSupport.clock("2026-10-30T15:30:00+09:00");
+        var onMapper = mock(StockRiskGradeMapper.class);
+        when(onMapper.sessionUtcOffsetSeconds()).thenReturn(32400);
+        when(onMapper.findAll()).thenReturn(List.of(row(1)));
+        var on = new RiskGradeServiceImpl(onMapper, RiskTestSupport.calendar(), clock, true);
+        assertThat(on.findUsable()).isEmpty();
+
+        var mapper = mock(StockRiskGradeMapper.class);
+        when(mapper.findAll()).thenReturn(List.of(row(1)));
+        when(mapper.findByTicker("005930")).thenReturn(row(1));
+        var calendar = mock(com.app.maria.domain.risk.calendar.KrxTradingCalendar.class);
+        var off = new RiskGradeServiceImpl(mapper, calendar, clock, false);
+        assertThat(off.findUsable())
+                .singleElement()
+                .satisfies(r -> assertThat(r.status()).isEqualTo(RiskDataStatus.CURRENT));
+        assertThat(off.findUsableByTicker("005930")).isPresent();
+        assertThat(off.findUsableByTickers(java.util.Set.of("005930"))).containsKey("005930");
+        verifyNoInteractions(calendar);
+        verify(mapper, never()).sessionUtcOffsetSeconds();
+    }
+
+    @Test
+    void freshnessCheckOffStillIgnoresMigratedVersionZero() throws Exception {
+        var mapper = mock(StockRiskGradeMapper.class);
+        when(mapper.findAll()).thenReturn(List.of(row(0)));
+        var service =
+                new RiskGradeServiceImpl(
+                        mapper,
+                        mock(com.app.maria.domain.risk.calendar.KrxTradingCalendar.class),
+                        RiskTestSupport.clock("2026-10-30T15:30:00+09:00"),
+                        false);
+        assertThat(service.findUsable()).isEmpty();
+    }
 }
