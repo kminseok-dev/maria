@@ -1,11 +1,13 @@
 package com.app.maria.domain.news.provider;
 
 import com.app.maria.domain.news.dto.NewsArticle;
+import com.app.maria.domain.news.service.NewsThemeService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -14,8 +16,10 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "news.provider", havingValue = "demo")
 public class MockNewsProvider implements NewsProvider {
     private final List<NewsArticle> articles;
+    private final NewsThemeService themes;
 
-    public MockNewsProvider(ObjectMapper mapper) throws IOException {
+    public MockNewsProvider(ObjectMapper mapper, NewsThemeService themes) throws IOException {
+        this.themes = themes;
         try (var input = new ClassPathResource("news/demo-articles.json").getInputStream()) {
             articles =
                     List.copyOf(mapper.readValue(input, new TypeReference<List<NewsArticle>>() {}));
@@ -48,6 +52,16 @@ public class MockNewsProvider implements NewsProvider {
 
     public List<NewsArticle> articles() {
         return articles;
+    }
+
+    // 보유 종목 테마를 화면 안내("보유 종목 테마: …")에 쓴다. ThemeNewsProvider와 같은 방식
+    @Override
+    public List<String> themeNames(com.app.maria.domain.news.dto.NewsContract.Context context) {
+        return themes.themes(context.tickers()).values().stream()
+                .flatMap(Set::stream)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     @Override

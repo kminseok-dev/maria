@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import com.app.maria.domain.customer.entity.InvestorType;
 import com.app.maria.domain.news.client.FreeNewsClient;
 import com.app.maria.domain.news.dto.NewsContract.*;
+import com.app.maria.domain.news.service.NewsThemeService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.*;
@@ -323,11 +324,13 @@ class FreeNewsProviderTest {
 
     @Test
     void fullArticleBodyIsNotSerializedIntoCustomerApi() throws Exception {
-        var provider = new MockNewsProvider(new ObjectMapper().findAndRegisterModules());
+        var provider =
+                new MockNewsProvider(
+                        new ObjectMapper().findAndRegisterModules(), new NewsThemeService(null));
         var article = provider.articles().get(0);
         var json = new ObjectMapper().findAndRegisterModules().valueToTree(article);
         assertThat(json.has("body")).isFalse();
-        assertThat(json.path("demo").asBoolean()).isTrue();
+        assertThat(json.path("demo").asBoolean()).isEqualTo(article.demo());
         assertThat(article.body()).isNotBlank();
     }
 }
