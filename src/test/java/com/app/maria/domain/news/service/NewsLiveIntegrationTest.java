@@ -32,7 +32,7 @@ class NewsLiveIntegrationTest {
         var ai =
                 new NewsAiService(
                         new NewsAiConfig().newsChatClient(model, new NewsProperties()), mapper);
-        var article = new MockNewsProvider(mapper).articles().get(0);
+        var article = new MockNewsProvider(mapper, new NewsThemeService(null)).articles().get(0);
         var context =
                 new Context(
                         1L, Set.of("005930"), InvestorType.STABLE, PersonalizationStatus.ACTIVE);
