@@ -80,8 +80,8 @@ public record NewsAnswerContent(String explanation, List<String> points, String 
     public static NumericEvidence numericEvidenceResult(NewsArticle article, String question) {
         var keywords = questionKeywords(question);
         var evidence = new EvidenceCandidates(keywords);
-        for (String sentence :
-                (article.title() + "\n" + article.body()).split("(?<=[.!?。])\\s+|\n+")) {
+        // 제목은 수치 근거 목록에 넣지 않는다(제목 속 날짜·숫자가 근거 항목처럼 보임)
+        for (String sentence : article.body().split("(?<=[.!?。])\\s+|\n+")) {
             sentence = sentence.strip();
             var matches = NUMBER.matcher(sentence);
             if (!matches.find()) continue;
