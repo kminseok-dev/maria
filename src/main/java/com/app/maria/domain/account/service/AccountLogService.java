@@ -26,6 +26,9 @@ public interface AccountLogService {
     void recordBenefitChange(
             AccountDTO account, BenefitType previousStatus, LocalDateTime changedAt, String reason);
 
+    /** 세제혜택 변경 이력 여러 건을 한 번에 남긴다. 저장된 행 수가 다르면 예외. */
+    void recordBenefitChanges(List<AccountBenefitLogDTO> logs);
+
     List<AccountBenefitLogDTO> getBenefitLogs(Long accountId);
 
     int getTodayProcessedAccountCount(Status newStatus);

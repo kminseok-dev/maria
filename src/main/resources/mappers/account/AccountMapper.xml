@@ -178,6 +178,35 @@
             </otherwise>
         </choose>
     </update>
+    
+    <select id="selectBenefitsForUpdate" resultType="AccountDTO">
+        select account_id,benefit
+        from account
+        where account_id in
+
+        <foreach collection="accountIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        order by account_id
+        for update
+    </select>
+
+    <update id="updateBenefits">
+        update account
+        set benefit = #{newStatus}
+        where account_id in
+        <foreach collection="accountIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        <choose>
+            <when test="expectedStatus == null">
+                and benefit is null
+            </when>
+            <otherwise>
+                and benefit = #{expectedStatus}
+            </otherwise>
+        </choose>
+    </update>
 
     <select id="selectCiHashByCustomerId" parameterType="Long" resultType="String">
         SELECT

@@ -2,13 +2,18 @@ package com.app.maria.domain.account.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.app.maria.domain.account.dto.AccountBenefitLogDTO;
 import com.app.maria.domain.account.dto.AccountDTO;
 import com.app.maria.domain.account.dto.request.AccountReapplyRequestDTO;
 import com.app.maria.domain.account.mapper.AccountMapper;
@@ -22,6 +27,9 @@ import com.app.maria.global.exception.AppException;
 import com.app.maria.global.exception.ErrorType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -477,6 +485,111 @@ class AccountTransactionalServiceImplTest {
         assertThatThrownBy(() -> service.apply(null, account(Status.APPLIED, LIMIT), NOW, false))
                 .isInstanceOf(NullPointerException.class);
         org.mockito.Mockito.verifyNoInteractions(accountMapper, auditLogService);
+    }
+
+    // ---- changeBenefits: 세액 스냅샷 배치의 청크 단위 세제혜택 전환 ----
+
+    private static final String BULK_REASON = "일별 세액 스냅샷 배치 판정";
+
+    private AccountDTO benefitAccount(long accountId, BenefitType benefit) {
+        return AccountDTO.builder().accountId(accountId).benefit(benefit).build();
+    }
+
+    @Test
+    void changeBenefitsSkipsImpossibleSameAndMissingAndLogsOnlyChanged() {
+        Map<Long, BenefitType> request = new LinkedHashMap<>();
+        request.put(1L, BenefitType.REDUCED); // POSSIBLE → REDUCED
+        request.put(2L, BenefitType.POSSIBLE); // REDUCED → POSSIBLE
+        request.put(3L, BenefitType.POSSIBLE); // IMPOSSIBLE: 복구 경로 없음
+        request.put(4L, BenefitType.POSSIBLE); // 같은 상태
+        request.put(5L, BenefitType.REDUCED); // 조회 안 됨
+        when(accountMapper.selectBenefitsForUpdate(anyList()))
+                .thenReturn(
+                        List.of(
+                                benefitAccount(1L, BenefitType.POSSIBLE),
+                                benefitAccount(2L, BenefitType.REDUCED),
+                                benefitAccount(3L, BenefitType.IMPOSSIBLE),
+                                benefitAccount(4L, BenefitType.POSSIBLE)));
+        when(accountMapper.updateBenefits(List.of(1L), BenefitType.REDUCED, BenefitType.POSSIBLE))
+                .thenReturn(1);
+        when(accountMapper.updateBenefits(List.of(2L), BenefitType.POSSIBLE, BenefitType.REDUCED))
+                .thenReturn(1);
+
+        int changed = service.changeBenefits(request, BULK_REASON, NOW);
+
+        assertThat(changed).isEqualTo(2);
+        ArgumentCaptor<List<Long>> lockedIds = ArgumentCaptor.forClass(List.class);
+        verify(accountMapper).selectBenefitsForUpdate(lockedIds.capture());
+        assertThat(lockedIds.getValue()).containsExactlyInAnyOrder(1L, 2L, 3L, 4L, 5L);
+        verify(accountMapper, times(2)).updateBenefits(anyList(), any(), any());
+        ArgumentCaptor<List<AccountBenefitLogDTO>> logs = ArgumentCaptor.forClass(List.class);
+        verify(accountLogService).recordBenefitChanges(logs.capture());
+        assertThat(logs.getValue())
+                .extracting(
+                        AccountBenefitLogDTO::getAccountId,
+                        AccountBenefitLogDTO::getPrevStatus,
+                        AccountBenefitLogDTO::getNewStatus,
+                        AccountBenefitLogDTO::getChangedAt,
+                        AccountBenefitLogDTO::getReason)
+                .containsExactlyInAnyOrder(
+                        tuple(1L, BenefitType.POSSIBLE, BenefitType.REDUCED, NOW, BULK_REASON),
+                        tuple(2L, BenefitType.REDUCED, BenefitType.POSSIBLE, NOW, BULK_REASON));
+    }
+
+    @Test
+    void changeBenefitsGroupsSameTransitionIntoOneUpdate() {
+        Map<Long, BenefitType> request = new LinkedHashMap<>();
+        request.put(1L, BenefitType.REDUCED);
+        request.put(2L, BenefitType.REDUCED);
+        when(accountMapper.selectBenefitsForUpdate(anyList()))
+                .thenReturn(
+                        List.of(
+                                benefitAccount(1L, BenefitType.POSSIBLE),
+                                benefitAccount(2L, BenefitType.POSSIBLE)));
+        ArgumentCaptor<List<Long>> updatedIds = ArgumentCaptor.forClass(List.class);
+        when(accountMapper.updateBenefits(
+                        updatedIds.capture(), eq(BenefitType.REDUCED), eq(BenefitType.POSSIBLE)))
+                .thenReturn(2);
+
+        assertThat(service.changeBenefits(request, BULK_REASON, NOW)).isEqualTo(2);
+        verify(accountMapper, times(1)).updateBenefits(anyList(), any(), any());
+        assertThat(updatedIds.getValue()).containsExactlyInAnyOrder(1L, 2L);
+    }
+
+    @Test
+    void changeBenefitsUsesNullExpectedStatusWhenBenefitIsNull() {
+        when(accountMapper.selectBenefitsForUpdate(anyList()))
+                .thenReturn(List.of(benefitAccount(1L, null)));
+        when(accountMapper.updateBenefits(List.of(1L), BenefitType.POSSIBLE, null)).thenReturn(1);
+
+        assertThat(service.changeBenefits(Map.of(1L, BenefitType.POSSIBLE), BULK_REASON, NOW))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void changeBenefitsThrowsWhenUpdatedRowCountDiffers() {
+        when(accountMapper.selectBenefitsForUpdate(anyList()))
+                .thenReturn(List.of(benefitAccount(1L, BenefitType.POSSIBLE)));
+        when(accountMapper.updateBenefits(List.of(1L), BenefitType.REDUCED, BenefitType.POSSIBLE))
+                .thenReturn(0);
+
+        assertThatThrownBy(
+                        () ->
+                                service.changeBenefits(
+                                        Map.of(1L, BenefitType.REDUCED), BULK_REASON, NOW))
+                .isInstanceOfSatisfying(
+                        AppException.class,
+                        exception ->
+                                assertThat(exception.getErrorType())
+                                        .isEqualTo(ErrorType.ACCOUNT_BENEFIT_UPDATE_FAILED));
+        verify(accountLogService, never()).recordBenefitChanges(anyList());
+    }
+
+    @Test
+    void changeBenefitsDoesNothingForEmptyRequest() {
+        assertThat(service.changeBenefits(Map.of(), BULK_REASON, NOW)).isZero();
+
+        verifyNoInteractions(accountMapper, accountLogService);
     }
 
     private AccountDTO account(Status status, BigDecimal limit) {

@@ -13,6 +13,7 @@ import com.app.maria.domain.tax.mapper.TaxSnapshotMapper;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -69,32 +70,20 @@ class TaxSnapshotWriterTest {
     }
 
     @Test
-    @DisplayName("외부순매수가 0보다 크면 REDUCED로 전환한다")
-    void write_외부순매수있으면_REDUCED로_전환() {
-        TaxSnapshotDTO snapshot = snapshot(1L, "4000000");
-
-        writer.write(new Chunk<>(List.of(snapshot)));
+    @DisplayName("외부순매수 > 0이면 REDUCED, 0이면 POSSIBLE로 모아 청크당 한 번만 전환을 요청한다")
+    void write_세제혜택_전환을_청크당_한번에_요청한다() {
+        writer.write(new Chunk<>(List.of(snapshot(1L, "4000000"), snapshot(2L, "0"))));
 
         verify(accountTransactionalService)
-                .changeBenefit(
-                        eq(1L),
-                        eq(BenefitType.REDUCED),
+                .changeBenefits(
+                        eq(Map.of(1L, BenefitType.REDUCED, 2L, BenefitType.POSSIBLE)),
                         org.mockito.ArgumentMatchers.any(),
                         eq(CALCULATED_AT));
-    }
-
-    @Test
-    @DisplayName("외부순매수가 0이면 POSSIBLE로 전환한다")
-    void write_외부순매수없으면_POSSIBLE로_전환() {
-        TaxSnapshotDTO snapshot = snapshot(1L, "0");
-
-        writer.write(new Chunk<>(List.of(snapshot)));
-
-        verify(accountTransactionalService)
+        verify(accountTransactionalService, never())
                 .changeBenefit(
-                        eq(1L),
-                        eq(BenefitType.POSSIBLE),
+                        org.mockito.ArgumentMatchers.anyLong(),
                         org.mockito.ArgumentMatchers.any(),
-                        eq(CALCULATED_AT));
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
     }
 }

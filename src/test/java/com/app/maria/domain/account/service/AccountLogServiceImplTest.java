@@ -3,6 +3,8 @@ package com.app.maria.domain.account.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.app.maria.domain.account.dto.AccountBenefitLogDTO;
@@ -16,6 +18,7 @@ import com.app.maria.global.clock.service.BusinessClockService;
 import com.app.maria.global.exception.AppException;
 import com.app.maria.global.exception.ErrorType;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -58,6 +61,29 @@ class AccountLogServiceImplTest {
                         exception ->
                                 assertThat(exception.getErrorType())
                                         .isEqualTo(ErrorType.ACCOUNT_BENEFIT_LOG_SAVE_FAILED));
+    }
+
+    @Test
+    void benefitLogsBulkSaveFailureUsesDedicatedError() {
+        List<AccountBenefitLogDTO> logs =
+                List.of(
+                        AccountBenefitLogDTO.builder().accountId(1L).build(),
+                        AccountBenefitLogDTO.builder().accountId(2L).build());
+        when(accountBenefitLogMapper.insertLogs(logs)).thenReturn(1);
+
+        assertThatThrownBy(() -> service.recordBenefitChanges(logs))
+                .isInstanceOfSatisfying(
+                        AppException.class,
+                        exception ->
+                                assertThat(exception.getErrorType())
+                                        .isEqualTo(ErrorType.ACCOUNT_BENEFIT_LOG_SAVE_FAILED));
+    }
+
+    @Test
+    void benefitLogsBulkSkipsInsertWhenEmpty() {
+        service.recordBenefitChanges(List.of());
+
+        verify(accountBenefitLogMapper, never()).insertLogs(any());
     }
 
     private AccountDTO account() {

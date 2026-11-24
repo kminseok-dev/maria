@@ -6,6 +6,7 @@ import com.app.maria.domain.account.type.BenefitType;
 import com.app.maria.global.audit.dto.AuditActor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 public interface AccountTransactionalService {
     AccountDTO applyAs(
@@ -55,4 +56,15 @@ public interface AccountTransactionalService {
      */
     boolean changeBenefit(
             Long accountId, BenefitType newStatus, String reason, LocalDateTime changedAt);
+
+    /**
+     * 여러 계좌의 세제혜택 상태를 한 번에 바꾼다. 전이 규칙은 {@link #changeBenefit}과 같다.
+     *
+     * <p>세액 스냅샷 배치가 청크(200계좌)마다 부른다. 계좌 행을 id 순으로 잠근 뒤 바뀌는 계좌만 묶어서 UPDATE하고, 이력도 한 번에 넣는다.
+     *
+     * @param newStatusByAccountId 계좌 id → 바꿀 상태
+     * @return 실제로 바뀐 계좌 수(IMPOSSIBLE·같은 상태·없는 계좌는 제외)
+     */
+    int changeBenefits(
+            Map<Long, BenefitType> newStatusByAccountId, String reason, LocalDateTime changedAt);
 }

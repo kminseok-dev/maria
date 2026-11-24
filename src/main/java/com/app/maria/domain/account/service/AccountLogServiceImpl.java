@@ -81,6 +81,16 @@ public class AccountLogServiceImpl implements AccountLogService {
     }
 
     @Override
+    public void recordBenefitChanges(List<AccountBenefitLogDTO> logs) {
+        if (logs.isEmpty()) {
+            return;
+        }
+        if (accountBenefitLogMapper.insertLogs(logs) != logs.size()) {
+            throw new AppException(ErrorType.ACCOUNT_BENEFIT_LOG_SAVE_FAILED, logs.size());
+        }
+    }
+
+    @Override
     public List<AccountBenefitLogDTO> getBenefitLogs(Long accountId) {
         return accountBenefitLogMapper.selectByAccountId(accountId);
     }

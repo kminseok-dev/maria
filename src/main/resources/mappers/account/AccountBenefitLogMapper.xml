@@ -20,6 +20,19 @@
         )
     </insert>
 
+    <insert id="insertLogs">
+        insert into account_benefit_log(
+            account_id,
+            prev_status,
+            new_status,
+            changed_at,
+            reason
+        )values
+        <foreach collection="logs" item="log" separator=",">
+            (#{log.accountId}, #{log.prevStatus}, #{log.newStatus}, #{log.changedAt}, #{log.reason})
+        </foreach>
+    </insert>
+
     <select id="selectByAccountId" resultType="AccountBenefitLogDTO" parameterType="Long">
         SELECT
             benefit_id,

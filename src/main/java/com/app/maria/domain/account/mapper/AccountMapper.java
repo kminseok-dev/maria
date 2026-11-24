@@ -78,6 +78,15 @@ public interface AccountMapper {
             @Param("newStatus") BenefitType newStatus,
             @Param("expectedStatus") BenefitType expectedStatus);
 
+    // 여러 계좌를 account_id 오름차순으로 잠그고 조회(교착 방지). 세액 스냅샷 배치 전용
+    List<AccountDTO> selectBenefitsForUpdate(@Param("accountIds") List<Long> accountIds);
+
+    // 여러 계좌의 세제혜택 상태 변경(현재 상태가 expectedStatus일 때만, NULL이면 IS NULL)
+    int updateBenefits(
+            @Param("accountIds") List<Long> accountIds,
+            @Param("newStatus") BenefitType newStatus,
+            @Param("expectedStatus") BenefitType expectedStatus);
+
     /** ci_hash로 고객의 계좌를 찾는다(증권사 시스템이 고객을 이 값으로만 알린다). */
     Optional<AccountDTO> selectByCiHash(@Param("ciHash") String ciHash);
 

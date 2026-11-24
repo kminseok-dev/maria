@@ -1,5 +1,6 @@
 package com.app.maria.domain.account.service;
 
+import com.app.maria.domain.account.dto.AccountBenefitLogDTO;
 import com.app.maria.domain.account.dto.AccountDTO;
 import com.app.maria.domain.account.dto.request.AccountReapplyRequestDTO;
 import com.app.maria.domain.account.mapper.AccountMapper;
@@ -13,6 +14,10 @@ import com.app.maria.global.exception.AppException;
 import com.app.maria.global.exception.ErrorType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -277,6 +282,54 @@ public class AccountTransactionalServiceImpl implements AccountTransactionalServ
         account.setBenefit(newStatus);
         accountLogService.recordBenefitChange(account, previousStatus, changedAt, reason);
         return true;
+    }
+
+    @Override
+    @Transactional
+    public int changeBenefits(
+            Map<Long, BenefitType> newStatusByAccountId, String reason, LocalDateTime changedAt) {
+        if (newStatusByAccountId.isEmpty()) {
+            return 0;
+        }
+
+        List<AccountDTO> accounts =
+                accountMapper.selectBenefitsForUpdate(
+                        new ArrayList<>(newStatusByAccountId.keySet()));
+
+        Map<BenefitType, Map<BenefitType, List<Long>>> idsByTransition = new HashMap<>();
+        List<AccountBenefitLogDTO> logs = new ArrayList<>();
+        for (AccountDTO account : accounts) {
+            BenefitType previousStatus = account.getBenefit();
+            BenefitType newStatus = newStatusByAccountId.get(account.getAccountId());
+            if (previousStatus == newStatus || previousStatus == BenefitType.IMPOSSIBLE) {
+                continue;
+            }
+
+            idsByTransition
+                    .computeIfAbsent(previousStatus, k -> new HashMap<>())
+                    .computeIfAbsent(newStatus, k -> new ArrayList<>())
+                    .add(account.getAccountId());
+            logs.add(
+                    AccountBenefitLogDTO.builder()
+                            .accountId(account.getAccountId())
+                            .prevStatus(previousStatus)
+                            .newStatus(newStatus)
+                            .changedAt(changedAt)
+                            .reason(reason)
+                            .build());
+        }
+
+        for (var byPrevious : idsByTransition.entrySet()) {
+            for (var byNew : byPrevious.getValue().entrySet()) {
+                List<Long> ids = byNew.getValue();
+                if (accountMapper.updateBenefits(ids, byNew.getKey(), byPrevious.getKey())
+                        != ids.size()) {
+                    throw new AppException(ErrorType.ACCOUNT_BENEFIT_UPDATE_FAILED, ids.size());
+                }
+            }
+        }
+        accountLogService.recordBenefitChanges(logs);
+        return logs.size();
     }
 
     private AccountDTO find(Long id) {
