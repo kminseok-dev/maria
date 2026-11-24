@@ -289,7 +289,9 @@ CREATE TABLE target_product_judgement (
     trade_date           DATE          NOT NULL COMMENT 'F1 시기별 가중치 판정용',
     net_buy_amount       DECIMAL(15,2) NOT NULL COMMENT 'F3이 바로 합산할 부호처리된 금액(SELL만 음수, 나머지 양수)',
     PRIMARY KEY (judgement_id),
-    CONSTRAINT uq_target_product__trade UNIQUE (mydata_trade_id)
+    CONSTRAINT uq_target_product__trade UNIQUE (mydata_trade_id),
+    -- ci_hash는 시스템 간 공유키라 FK가 없어 자동 인덱스가 생기지 않는다. 세액 스냅샷 배치의 외부 순매수 조회가 이 컬럼으로 조인한다
+    KEY idx_tpj_ci_target (ci_hash, is_target, trade_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='G2 대상상품 판별 결과(스냅샷)';
 
 -- G1 거래 판정 실패 재시도 카운트(N회 초과 시 영구실패로 커서를 넘김)
